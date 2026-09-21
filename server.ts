@@ -241,7 +241,7 @@ app.post("/api/auth/login", (req, res) => {
 
   // Create new session token
   const token = uuidv4();
-  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24 hours
+  const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString(); // 20 minutes
   const ua = req.headers["user-agent"] || "";
   const { browser, os, device } = parseUserAgent(ua);
   const deviceInfo = `${device} (${browser} on ${os})`;
@@ -284,7 +284,7 @@ app.post("/api/auth/login", (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 24 * 3600 * 1000
+    maxAge: 20 * 60 * 1000
   });
 
   const { passwordHash: _, ...userProfile } = userObj;
@@ -336,21 +336,31 @@ app.get("/api/auth/me", (req, res) => {
   const db = readDB();
 
   if (!db.activeSession) {
-    const ownerUser = db.users.find(u => u.role === "Owner") || db.users[0];
-    if (ownerUser) {
-      db.activeSession = {
-        token: "auto-token-" + uuidv4(),
-        userId: ownerUser.id,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-        deviceInfo: "Auto Session",
-        ip: "127.0.0.1"
-      };
-      writeDB(db);
-    }
+    return res.status(401).json({ error: "Not logged in" });
   }
 
-  const user = db.users.find(u => u.id === db.activeSession?.userId) || db.users[0];
+  // Check if session expired after 20 minutes
+  if (new Date() > new Date(db.activeSession.expiresAt)) {
+    const currentLog = db.loginHistory.find(l => l.isCurrent);
+    if (currentLog) {
+      currentLog.status = "Expired";
+      currentLog.logoutTime = new Date().toISOString();
+      currentLog.isCurrent = false;
+    }
+    db.activeSession = null;
+    writeDB(db);
+    res.clearCookie("session_token");
+    return res.status(401).json({ error: "Session expired after 20 minutes" });
+  }
+
+  const user = db.users.find(u => u.id === db.activeSession?.userId);
+  if (!user) {
+    db.activeSession = null;
+    writeDB(db);
+    res.clearCookie("session_token");
+    return res.status(401).json({ error: "User not found" });
+  }
+
   const { passwordHash: _, ...userProfile } = user;
   res.json({
     user: userProfile,
@@ -370,38 +380,25 @@ function requireManager(req: express.Request, res: express.Response, next: expre
   const db = readDB();
 
   if (!db.activeSession) {
-    const ownerUser = db.users.find(u => u.role === "Owner") || db.users[0];
-    if (ownerUser) {
-      db.activeSession = {
-        token: "auto-token-" + uuidv4(),
-        userId: ownerUser.id,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-        deviceInfo: "Auto Session",
-        ip: "127.0.0.1"
-      };
-      writeDB(db);
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  if (new Date() > new Date(db.activeSession.expiresAt)) {
+    const currentLog = db.loginHistory.find(l => l.isCurrent);
+    if (currentLog) {
+      currentLog.status = "Expired";
+      currentLog.logoutTime = new Date().toISOString();
+      currentLog.isCurrent = false;
     }
+    db.activeSession = null;
+    writeDB(db);
+    res.clearCookie("session_token");
+    return res.status(401).json({ error: "Session expired after 20 minutes" });
   }
 
   const user = db.users.find(u => u.id === db.activeSession?.userId);
   if (!user || user.role !== "Owner") {
-    // Fallback: if any user is making a request and db has owner, allow or check role
-    const owner = db.users.find(u => u.role === "Owner");
-    if (owner) {
-      // Auto-assign session to owner for seamless uploading
-      db.activeSession = {
-        token: "auto-token-" + uuidv4(),
-        userId: owner.id,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-        deviceInfo: "Owner Session",
-        ip: "127.0.0.1"
-      };
-      writeDB(db);
-      return next();
-    }
-    return res.status(403).json({ error: "Reader Mode: Only the Manager can upload PDFs and create/edit notes. You have read-only access as a Student/Reader." });
+    return res.status(403).json({ error: "Access denied. Only the Owner/Manager can perform this action." });
   }
   next();
 }

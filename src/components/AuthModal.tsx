@@ -10,8 +10,8 @@ export function AuthModal({ onLogin }: AuthModalProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loginRole, setLoginRole] = useState<"manager" | "student">("manager");
   
-  const [username, setUsername] = useState("Gagan3806");
-  const [password, setPassword] = useState("Gagan3806");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
 
   const [error, setError] = useState("");
@@ -295,6 +295,8 @@ export function AuthModal({ onLogin }: AuthModalProps) {
                 <input
                   type="text"
                   required
+                  autoComplete="off"
+                  name="login_user_input"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
@@ -321,6 +323,8 @@ export function AuthModal({ onLogin }: AuthModalProps) {
                 <input
                   type="password"
                   required
+                  autoComplete="off"
+                  name="login_pass_input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
