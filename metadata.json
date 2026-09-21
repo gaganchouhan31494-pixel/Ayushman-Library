@@ -1,0 +1,7 @@
+{
+  "name": "Ayushman Library (आयुष्मान लाइब्रेरी)",
+  "description": "Professional personal notes and PDF book library with advanced reader, bookmarks, annotations, and cloud persistence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
